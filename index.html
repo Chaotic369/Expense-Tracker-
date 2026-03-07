@@ -9,7 +9,9 @@
     <meta name="theme-color" content="#a36526">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="icon-192.png"> <style>
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap');
 
         :root {
@@ -204,17 +206,17 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    // IMPORTANT: Replace apiKey and appId with the values from your Firebase Console (Project Settings > Web App)
+    // Your EXACT Firebase Configuration
     const firebaseConfig = {
-        apiKey: "YOUR_WEB_API_KEY_HERE", 
-        authDomain: "expense-tracker-ad6f1.firebaseapp.com",
-        databaseURL: "https://expense-tracker-ad6f1-default-rtdb.firebaseio.com",
-        projectId: "expense-tracker-ad6f1",
-        storageBucket: "expense-tracker-ad6f1.appspot.com",
-        messagingSenderId: "107600527726524596103",
-        appId: "YOUR_APP_ID_HERE"
+      apiKey: "AIzaSyAKYJjeh95f6yG973fZj6lkY0WmZ8xuQyM",
+      authDomain: "expense-tracker-ad6f1.firebaseapp.com",
+      databaseURL: "https://expense-tracker-ad6f1-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "expense-tracker-ad6f1",
+      storageBucket: "expense-tracker-ad6f1.firebasestorage.app",
+      messagingSenderId: "719841369287",
+      appId: "1:719841369287:web:abd9a688ad3495d3eeb2e2"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -224,7 +226,6 @@
     // --- Core Logic ---
     const syncDot = document.getElementById('sync-dot');
     const syncText = document.getElementById('sync-text');
-    let isInitialLoad = true;
 
     window.updateSyncStatus = function(status) {
         if (status === 'syncing') { syncDot.style.backgroundColor = '#facc15'; syncText.innerText = 'Saving...'; }
@@ -245,7 +246,6 @@
 
     let saveTimeout;
     window.debounceSave = function() {
-        if(isInitialLoad) return;
         updateSyncStatus('syncing');
         clearTimeout(saveTimeout);
         saveTimeout = setTimeout(() => {
@@ -269,7 +269,7 @@
                 console.error("Firebase save error:", error);
                 updateSyncStatus('error');
             });
-        }, 800); 
+        }, 1000); // 1-second delay so it doesn't spam the DB while typing
     }
 
     function renderData(data) {
@@ -292,22 +292,21 @@
         window.calculateTotals();
     }
 
-    // Initialize Firebase Listener
-    onValue(expensesRef, (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-            renderData(data);
+    // Initialize Data Once on Load
+    get(expensesRef).then((snapshot) => {
+        if (snapshot.exists()) {
+            renderData(snapshot.val());
             updateSyncStatus('synced');
         } else {
-            // First run: Check local storage, if empty, render blank
             const localData = localStorage.getItem('expense_tracker_data');
             renderData(localData ? JSON.parse(localData) : null);
             updateSyncStatus('synced');
         }
-        isInitialLoad = false;
-    }, (error) => {
-        console.error(error);
+    }).catch((error) => {
+        console.error("Fetch error:", error);
         updateSyncStatus('error');
+        const localData = localStorage.getItem('expense_tracker_data');
+        renderData(localData ? JSON.parse(localData) : null);
     });
 
     // Register Service Worker for PWA
