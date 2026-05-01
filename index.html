@@ -182,7 +182,7 @@
 
 <div class="analyzer-wrapper">
     <div class="header-box neu-raised">
-        <div class="main-title">Trip Expenese Tracker</div>
+        <div class="main-title">Trip Expenses Tracker</div>
     </div>
 
     <div class="tabs-container neu-raised" id="tabs-container">
@@ -212,6 +212,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     const expensesRef = ref(db, 'expenses/march2026');
+    const profilesRef = ref(db, 'profiles/march2026'); // NEW PROFILES NODE
 
     // --- Core Logic ---
     const syncDot = document.getElementById('sync-dot');
@@ -294,8 +295,11 @@
                 });
             });
             
-            // Push to Firebase (missing profiles in dataToSave will be automatically deleted from DB)
-            set(expensesRef, dataToSave).then(() => {
+            // Push to Firebase: Save both the expenses AND the active profiles list
+            Promise.all([
+                set(expensesRef, dataToSave),
+                set(profilesRef, window.activeProfiles)
+            ]).then(() => {
                 updateSyncStatus('synced');
                 localStorage.setItem('expense_tracker_data', JSON.stringify(dataToSave));
             }).catch(error => {
@@ -326,21 +330,24 @@
     }
 
     // Initialize Data Once on Load
-    get(expensesRef).then((snapshot) => {
-        const data = snapshot.val();
-        
-        // Sync profiles from DB that might have been added on another device
-        if (data) {
-            Object.keys(data).forEach(id => {
-                if (!window.activeProfiles.find(p => p.id === id)) {
-                    const name = id.charAt(0).toUpperCase() + id.slice(1);
-                    window.activeProfiles.push({ id, name });
-                    generateDOMForProfile(id, name);
+    get(profilesRef).then((profileSnap) => {
+        // 1. Sync profiles from the cloud first
+        if (profileSnap.exists()) {
+            const cloudProfiles = profileSnap.val();
+            cloudProfiles.forEach(cloudP => {
+                if (!window.activeProfiles.find(p => p.id === cloudP.id)) {
+                    window.activeProfiles.push(cloudP);
+                    generateDOMForProfile(cloudP.id, cloudP.name);
                 }
             });
             localStorage.setItem('expense_active_profiles', JSON.stringify(window.activeProfiles));
         }
-
+        
+        // 2. Then fetch the actual expense data
+        return get(expensesRef);
+    }).then((snapshot) => {
+        const data = snapshot.val();
+        
         if (snapshot.exists()) {
             renderData(data);
             updateSyncStatus('synced');
@@ -399,7 +406,7 @@
         blankRow.innerHTML = window.createNewRowHTML(); tbody.appendChild(blankRow);
 
         window.switchTab(id);
-        window.debounceSave(); // Saves to DB immediately
+        window.debounceSave(); // Saves to DB immediately, now including the new profile ID
     };
 
     // Feature 3: Delete Person
@@ -421,7 +428,7 @@
             else document.body.className = 'theme-default'; // Fallback if 0 profiles exist
         }
 
-        // Update Firebase (The missing key triggers deletion of their node)
+        // Update Firebase (The missing key triggers deletion of their node and profile ID)
         window.debounceSave(); 
     };
 
